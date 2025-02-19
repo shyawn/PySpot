@@ -1,6 +1,7 @@
 from dotenv import load_dotenv
 import os
 import re
+import eyed3
 import base64
 from requests import post, get
 import json
@@ -153,6 +154,27 @@ def get_ydl_opts(path):
             }
         ],
     }
+
+def add_track_metadata(track_id, metadata, path):
+    audiofile = eyed3.load(f"{path}/{track_id}.mp3")
+    if audiofile.tag == None:
+        audiofile.initTag()
+
+    # Add basic tags
+    audiofile.tag.title = metadata["track_name"]
+    audiofile.tag.album = metadata["album_name"]
+    audiofile.tag.artist = metadata["artist_name"]
+    audiofile.tag.release_date = metadata["album_date"]
+    audiofile.tag.track_num = metadata["track_number"]
+
+    album_art = rq.urlopen(metadata["album_art"]).read()
+    audiofile.tag.images.set(3, album_art, "image/jpeg")
+    audiofile.tag.save()
+
+    # Update downloaded file name
+    src = f"{path}/{track_id}.mp3"
+    dist = f"{path}/{metadata['file_name']}.mp3"
+    os.rename(src, dist)
 
 @app.route("/logout")
 def logout():
