@@ -3,6 +3,7 @@ import os
 import re
 import eyed3
 import base64
+from yt_dlp import YoutubeDL
 from requests import post, get
 import json
 from urllib import request as rq
@@ -175,6 +176,27 @@ def add_track_metadata(track_id, metadata, path):
     src = f"{path}/{track_id}.mp3"
     dist = f"{path}/{metadata['file_name']}.mp3"
     os.rename(src, dist)
+
+def download_tracks(playlist_uri):
+    playlist_details = get_playlist_details(playlist_uri)
+    path = download_dir(playlist_details["playlist_name"])
+    tracks = check_existing_tracks(playlist_details, path)
+    print(
+        f"\033[1m\033[33m[info] Downloading {len(tracks)} tracks from {playlist_details['playlist_name']}...\033[0m"
+    )
+    with YoutubeDL(get_ydl_opts(path)) as ydl:
+        for track in tracks:
+            html = rq.urlopen(
+                f"https://www.youtube.com/results?search_query={track['uri']}"
+            )
+            video_ids = re.findall(r"watch\?v=(\S{11})", html.read().decode())
+
+            if video_ids:
+                url = "https://www.youtube.com/watch?v=" + video_ids[0]
+                metadata = ydl.extract_info(url, download=False)
+                downloaded_track = ydl.download([url])
+
+                add_track_metadata(metadata["id"], track, path)
 
 @app.route("/logout")
 def logout():
