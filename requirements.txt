@@ -1,2 +1,6 @@
 Flask==3.0.2
 spotipy==2.23.0
+yt_dlp==2022.9.1
+PyInquirer==1.0.3
+pyfiglet==0.7
+eyed3==0.9.6
