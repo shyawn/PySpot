@@ -129,6 +129,15 @@ def download_dir(dir_name):
     except OSError:
             print("Creation of the download directory failed")
 
+def check_existing_tracks(playlist, path):
+    existing_tracks = os.listdir(path)
+    tracks = [
+        track
+        for track in playlist["playlist_tracks"]
+        if f"{track['file_name']}.mp3" not in existing_tracks
+    ]
+    return tracks
+
 @app.route("/logout")
 def logout():
     session.clear()
