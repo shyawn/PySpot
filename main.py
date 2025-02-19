@@ -22,6 +22,8 @@ client_secret = os.getenv("CLIENT_SECRET")
 redirect_uri = 'http://localhost:5000/callback'
 scope = 'playlist-read-private'
 
+download_path = "./downloads"
+
 cache_handler = FlaskSessionCacheHandler(session)
 sp_oauth = SpotifyOAuth(
     client_id=client_id,
@@ -68,26 +70,26 @@ def get_playlists():
 def normalize_str(string):
     return string.translate(str.maketrans('\\/:*?"<>|', "__       "))
 
-def get_playlist_details(pl_uri):
+def get_playlist_details(playlist_uri):
     offset = 0
     fields = "items.track.track_number,items.track.name,items.track.artists.name,items.track.album.name,items.track.album.release_date,total,items.track.album.images"
-    pl_name = sp.playlist(pl_uri)["name"]
-    pl_items = sp.playlist_items(
-        pl_uri,
+    playlist_name = sp.playlist(playlist_uri)["name"]
+    playlist_items = sp.playlist_items(
+        playlist_uri,
         offset=offset,
         fields=fields,
         additional_types=["track"],
     )["items"]
 
-    pl_tracks = []
-    while len(pl_items) > 0:
-        for item in pl_items:
+    playlist_tracks = []
+    while len(playlist_items) > 0:
+        for item in playlist_items:
             if item["track"]:
                 track_name = normalize_str(item["track"]["name"])
                 artist_name = normalize_str(
                     item["track"]["artists"][0]["name"]
                 )
-                pl_tracks.append(
+                playlist_tracks.append(
                     {
                         "uri": quote(
                             f'{track_name.replace(" ", "+")}+{artist_name.replace(" ", "+")}'
@@ -105,15 +107,27 @@ def get_playlist_details(pl_uri):
                 )
 
         # Reduce playlist items by increasing offset
-        offset = offset + len(pl_items)
-        pl_items = sp.playlist_items(
-            pl_uri,
+        offset = offset + len(playlist_items)
+        playlist_items = sp.playlist_items(
+            playlist_uri,
             offset=offset,
             fields=fields,
             additional_types=["track"],
         )["items"]
 
-    return {"pl_name": pl_name, "pl_tracks": pl_tracks}
+    return {"playlist_name": playlist_name, "playlist_tracks": playlist_tracks}
+
+def download_dir(dir_name):
+    path = f"{download_path}/{dir_name}"
+
+    if os.path.exists(path):
+        return path
+    
+    try:
+        os.makedirs(path)
+        return path
+    except OSError:
+            print("Creation of the download directory failed")
 
 @app.route("/logout")
 def logout():
