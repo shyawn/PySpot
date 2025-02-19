@@ -4,10 +4,63 @@ import base64
 from requests import post, get
 import json
 
+from flask import Flask, session, request, redirect, url_for
+
+from spotipy import Spotify
+from spotipy.oauth2 import SpotifyOAuth
+from spotipy.cache_handler import FlaskSessionCacheHandler
+
 load_dotenv()
+
+app = Flask(__name__)
+app.config['SECRET_KEY'] = os.urandom(64)
 
 client_id = os.getenv("CLIENT_ID")
 client_secret = os.getenv("CLIENT_SECRET")
+
+redirect_uri = 'http://localhost:5000/callback'
+scope = 'playlist-read-private'
+
+cache_handler = FlaskSessionCacheHandler(session)
+sp_oauth = SpotifyOAuth(
+    client_id=client_id,
+    client_secret=client_secret,
+    redirect_uri=redirect_uri,
+    scope=scope,
+    cache_handler=cache_handler,
+    show_dialog=True
+)
+
+sp = Spotify(auth_manager=sp_oauth)
+
+@app.route("/")
+def home():
+    if not sp_oauth.validate_token(cache_handler.get_cached_token()):
+        auth_url = sp_oauth.get_authorize_url()
+        return redirect(auth_url)
+    return redirect(url_for('get_playlists'))
+
+@app.route("/callback")
+def callback():
+    sp_oauth.get_access_token(request.args['code'])
+    return redirect(url_for('get_playlists'))
+
+@app.route("/get_playlists")
+def get_playlists():
+    if not sp_oauth.validate_token(cache_handler.get_cached_token()):
+        auth_url = sp_oauth.get_authorize_url()
+        return redirect(auth_url)
+    
+    playlist = sp.current_user_playlists()
+    playlist_info = [(pl['name'], pl['external_urls']['spotify']) for pl in playlist['items']]
+    playlist_html = '<br>'.join([f"{name}: {url}" for name, url in playlist_info])\
+    
+    return playlist_html
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect(url_for('home'))
 
 def get_token():
     auth_string = client_id + ":" + client_secret
@@ -48,10 +101,13 @@ def get_songs_by_artist(token, artist_id):
     json_result = json.loads(result.content)["tracks"]
     return json_result
     
-token = get_token()
-result = search_for_artist(token, "ACDC")
-artist_id = result["id"]
-songs = get_songs_by_artist(token, artist_id)
+# token = get_token()
+# result = search_for_artist(token, "ACDC")
+# artist_id = result["id"]
+# songs = get_songs_by_artist(token, artist_id)
 
-for idx, song in enumerate(songs):
-    print(f"{idx + 1}. {song['name']}")
+# for idx, song in enumerate(songs):
+#     print(f"{idx + 1}. {song['name']}")
+
+if __name__ == '__main__':
+    app.run(debug=True)
