@@ -3,6 +3,7 @@ import os
 import base64
 from requests import post, get
 import json
+from urllib.parse import quote
 
 from flask import Flask, session, request, redirect, url_for
 
@@ -45,61 +46,118 @@ def callback():
     sp_oauth.get_access_token(request.args['code'])
     return redirect(url_for('get_playlists'))
 
+pl_uri = os.getenv("PL_URI")
+
 @app.route("/get_playlists")
 def get_playlists():
     if not sp_oauth.validate_token(cache_handler.get_cached_token()):
         auth_url = sp_oauth.get_authorize_url()
         return redirect(auth_url)
     
-    playlist = sp.current_user_playlists()
-    playlist_info = [(pl['name'], pl['external_urls']['spotify']) for pl in playlist['items']]
-    playlist_html = '<br>'.join([f"{name}: {url}" for name, url in playlist_info])\
+    # playlist = sp.current_user_playlists()
+    # # print(playlist)
+    # playlist_info = [(pl['name'], pl['uri']) for pl in playlist['items']]
+    # playlist_html = '<br>'.join([f"{name}: {url}" for name, url in playlist_info])
     
-    return playlist_html
+    # return playlist_html
+
+    p_details = get_playlist_details(pl_uri)
+    p_show = '<br>'.join([f"{item['track_name']}: {item['artist_name']}" for item in p_details])
+    return p_show
+
+def normalize_str(string):
+    return string.translate(str.maketrans('\\/:*?"<>|', "__       "))
+
+def get_playlist_details(pl_uri):
+    offset = 0
+    fields = "items.track.track_number,items.track.name,items.track.artists.name,items.track.album.name,items.track.album.release_date,total,items.track.album.images"
+    pl_name = sp.playlist(pl_uri)["name"]
+    pl_items = sp.playlist_items(
+        pl_uri,
+        offset=offset,
+        fields=fields,
+        additional_types=["track"],
+    )["items"]
+
+    pl_tracks = []
+    while len(pl_items) > 0:
+        for item in pl_items:
+            if item["track"]:
+                track_name = normalize_str(item["track"]["name"])
+                artist_name = normalize_str(
+                    item["track"]["artists"][0]["name"]
+                )
+                pl_tracks.append(
+                    {
+                        "uri": quote(
+                            f'{track_name.replace(" ", "+")}+{artist_name.replace(" ", "+")}'
+                        ),
+                        "file_name": f"{artist_name} - {track_name}",
+                        "track_name": track_name,
+                        "artist_name": artist_name,
+                        "album_name": normalize_str(
+                            item["track"]["album"]["name"]
+                        ),
+                        "album_date": item["track"]["album"]["release_date"],
+                        "track_number": item["track"]["track_number"],
+                        "album_art": item["track"]["album"]["images"][0]["url"],
+                    }
+                )
+
+        # Reduce playlist items by increasing offset
+        offset = offset + len(pl_items)
+        pl_items = sp.playlist_items(
+            pl_uri,
+            offset=offset,
+            fields=fields,
+            additional_types=["track"],
+        )["items"]
+
+    return {"pl_name": pl_name, "pl_tracks": pl_tracks}
 
 @app.route("/logout")
 def logout():
     session.clear()
     return redirect(url_for('home'))
 
-def get_token():
-    auth_string = client_id + ":" + client_secret
-    auth_bytes = auth_string.encode("utf-8")
-    auth_base64 = str(base64.b64encode(auth_bytes), "utf-8")
+# def get_token():
+#     auth_string = client_id + ":" + client_secret
+#     auth_bytes = auth_string.encode("utf-8")
+#     auth_base64 = str(base64.b64encode(auth_bytes), "utf-8")
 
-    url = "https://accounts.spotify.com/api/token"
-    headers = {
-        "Authorization": "Basic " + auth_base64,
-        "Content-Type": "application/x-www-form-urlencoded" 
-    }
-    data = {"grant_type": "client_credentials"}
-    result = post(url, headers=headers, data=data)
-    json_result = json.loads(result.content)
-    token = json_result["access_token"]
-    return token
+#     url = "https://accounts.spotify.com/api/token"
+#     headers = {
+#         "Authorization": "Basic " + auth_base64,
+#         "Content-Type": "application/x-www-form-urlencoded" 
+#     }
+#     data = {"grant_type": "client_credentials"}
+#     result = post(url, headers=headers, data=data)
+#     json_result = json.loads(result.content)
+#     token = json_result["access_token"]
+#     return token
 
-def get_auth_headers(token):
-    return {"Authorization": "Bearer " + token}
+# def get_auth_headers(token):
+#     return {"Authorization": "Bearer " + token}
 
-def search_for_artist(token, artist_name):
-    url = "https://api.spotify.com/v1/search"
-    headers = get_auth_headers(token)
-    query = f"?q={artist_name}&type=artist&limit=1"
+# def search_for_artist(token, artist_name):
+#     url = "https://api.spotify.com/v1/search"
+#     headers = get_auth_headers(token)
+#     query = f"?q={artist_name}&type=artist&limit=1"
 
-    query_url = url + query
-    result = get(query_url, headers=headers)
-    json_result = json.loads(result.content)["artists"]["items"]
-    if len(json_result) == 0:
-        print("No artist with this name exists...")
-        return None
-    return json_result[0]
+#     query_url = url + query
+#     result = get(query_url, headers=headers)
+#     json_result = json.loads(result.content)["artists"]["items"]
+#     if len(json_result) == 0:
+#         print("No artist with this name exists...")
+#         return None
+#     return json_result[0]
 
-def get_songs_by_artist(token, artist_id):
-    url = f"https://api.spotify.com/v1/artists/{artist_id}/top-tracks?country=US"
-    headers = get_auth_headers(token)
-    result = get(url, headers=headers)
-    json_result = json.loads(result.content)["tracks"]
-    return json_result
+# def get_songs_by_artist(token, artist_id):
+#     url = f"https://api.spotify.com/v1/artists/{artist_id}/top-tracks?country=US"
+#     headers = get_auth_headers(token)
+#     result = get(url, headers=headers)
+#     json_result = json.loads(result.content)["tracks"]
+#     return json_result
     
 # token = get_token()
 # result = search_for_artist(token, "ACDC")
