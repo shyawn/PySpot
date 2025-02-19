@@ -60,16 +60,17 @@ def get_playlists():
         auth_url = sp_oauth.get_authorize_url()
         return redirect(auth_url)
     
-    # playlist = sp.current_user_playlists()
-    # # print(playlist)
-    # playlist_info = [(pl['name'], pl['uri']) for pl in playlist['items']]
-    # playlist_html = '<br>'.join([f"{name}: {url}" for name, url in playlist_info])
+    playlist = sp.current_user_playlists()
+    # print(playlist)
+    playlist_info = [(pl['name'], pl['uri']) for pl in playlist['items']]
+    playlist_html = '<br>'.join([f"{name}: {url}" for name, url in playlist_info])
     
-    # return playlist_html
 
-    p_details = get_playlist_details(pl_uri)
-    p_show = '<br>'.join([f"{item['track_name']}: {item['artist_name']}" for item in p_details])
-    return p_show
+    # p_details = get_playlist_details(pl_uri)
+    # p_show = '<br>'.join([f"{item['track_name']}: {item['artist_name']}" for item in p_details])
+    download_tracks(pl_uri)
+    # return p_show
+    return playlist_html
 
 def normalize_str(string):
     return string.translate(str.maketrans('\\/:*?"<>|', "__       "))
@@ -186,6 +187,7 @@ def download_tracks(playlist_uri):
     )
     with YoutubeDL(get_ydl_opts(path)) as ydl:
         for track in tracks:
+            # print("SEARCH URL: ", f"https://www.youtube.com/results?search_query={track['uri']}")
             html = rq.urlopen(
                 f"https://www.youtube.com/results?search_query={track['uri']}"
             )
@@ -193,7 +195,15 @@ def download_tracks(playlist_uri):
 
             if video_ids:
                 url = "https://www.youtube.com/watch?v=" + video_ids[0]
-                metadata = ydl.extract_info(url, download=False)
+                # metadata = ydl.extract_info(url, download=False)
+                
+                try:
+                    metadata = ydl.extract_info(url, download=False)
+                    if not metadata:
+                        raise ValueError("Metadata extraction failed")
+                except Exception as e:
+                    print(f"Error extracting metadata: {e}")
+                    continue
                 downloaded_track = ydl.download([url])
 
                 add_track_metadata(metadata["id"], track, path)
@@ -202,53 +212,6 @@ def download_tracks(playlist_uri):
 def logout():
     session.clear()
     return redirect(url_for('home'))
-
-# def get_token():
-#     auth_string = client_id + ":" + client_secret
-#     auth_bytes = auth_string.encode("utf-8")
-#     auth_base64 = str(base64.b64encode(auth_bytes), "utf-8")
-
-#     url = "https://accounts.spotify.com/api/token"
-#     headers = {
-#         "Authorization": "Basic " + auth_base64,
-#         "Content-Type": "application/x-www-form-urlencoded" 
-#     }
-#     data = {"grant_type": "client_credentials"}
-#     result = post(url, headers=headers, data=data)
-#     json_result = json.loads(result.content)
-#     token = json_result["access_token"]
-#     return token
-
-# def get_auth_headers(token):
-#     return {"Authorization": "Bearer " + token}
-
-# def search_for_artist(token, artist_name):
-#     url = "https://api.spotify.com/v1/search"
-#     headers = get_auth_headers(token)
-#     query = f"?q={artist_name}&type=artist&limit=1"
-
-#     query_url = url + query
-#     result = get(query_url, headers=headers)
-#     json_result = json.loads(result.content)["artists"]["items"]
-#     if len(json_result) == 0:
-#         print("No artist with this name exists...")
-#         return None
-#     return json_result[0]
-
-# def get_songs_by_artist(token, artist_id):
-#     url = f"https://api.spotify.com/v1/artists/{artist_id}/top-tracks?country=US"
-#     headers = get_auth_headers(token)
-#     result = get(url, headers=headers)
-#     json_result = json.loads(result.content)["tracks"]
-#     return json_result
-    
-# token = get_token()
-# result = search_for_artist(token, "ACDC")
-# artist_id = result["id"]
-# songs = get_songs_by_artist(token, artist_id)
-
-# for idx, song in enumerate(songs):
-#     print(f"{idx + 1}. {song['name']}")
 
 if __name__ == '__main__':
     app.run(debug=True)
