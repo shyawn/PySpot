@@ -1,8 +1,10 @@
 from dotenv import load_dotenv
 import os
+import re
 import base64
 from requests import post, get
 import json
+from urllib import request as rq
 from urllib.parse import quote
 
 from flask import Flask, session, request, redirect, url_for
@@ -137,6 +139,20 @@ def check_existing_tracks(playlist, path):
         if f"{track['file_name']}.mp3" not in existing_tracks
     ]
     return tracks
+
+def get_ydl_opts(path):
+    return {
+        "format": "bestaudio/best",
+        "outtmpl": f"{path}/%(id)s.%(ext)s",
+        "ignoreerrors": True,
+        "postprocessors": [
+            {
+                "key": "FFmpegExtractAudio",
+                "preferredcodec": "mp3",
+                "preferredquality": "320",
+            }
+        ],
+    }
 
 @app.route("/logout")
 def logout():
