@@ -4,3 +4,4 @@ yt_dlp==2025.2.19
 PyInquirer==1.0.3
 pyfiglet==0.7
 eyed3==0.9.7
+customtkinter==0.3
